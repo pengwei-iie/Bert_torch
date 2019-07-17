@@ -1,10 +1,10 @@
-export SQUAD_DIR=/data_squad
+export SQUAD_DIR=squad_data
 
-python examples/run_squad.py \
-  --bert_model bert-base-uncased \
-  --do_train True\
-  --do_predict True\
-  --do_lower_case True\
+CUDA_VISIBLE_DEVICES=4,5 python examples/run_squad.py \
+  --bert_model 'bert-base-uncased' \
+  --do_train \
+  --do_predict \
+  --do_lower_case \
   --train_file $SQUAD_DIR/train-v1.1.json \
   --predict_file $SQUAD_DIR/dev-v1.1.json \
   --train_batch_size 12 \
@@ -12,4 +12,4 @@ python examples/run_squad.py \
   --num_train_epochs 2.0 \
   --max_seq_length 384 \
   --doc_stride 128 \
-  --output_dir /tmp/debug_squad/
+  --output_dir tmp/debug_squad/
