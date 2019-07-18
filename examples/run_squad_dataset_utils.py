@@ -81,6 +81,7 @@ class InputFeatures(object):
                  input_ids,
                  input_mask,
                  segment_ids,
+                 all_doc_len,
                  start_position=None,
                  end_position=None,
                  is_impossible=None):
@@ -93,6 +94,7 @@ class InputFeatures(object):
         self.input_ids = input_ids
         self.input_mask = input_mask
         self.segment_ids = segment_ids
+        self.all_doc_len = all_doc_len
         self.start_position = start_position
         self.end_position = end_position
         self.is_impossible = is_impossible
@@ -136,9 +138,9 @@ def read_squad_examples(input_file, is_training, version_2_with_negative):
                 if is_training:
                     if version_2_with_negative:
                         is_impossible = qa["is_impossible"]
-                    if (len(qa["answers"]) != 1) and (not is_impossible):
-                        raise ValueError(
-                            "For training, each question should have exactly 1 answer.")
+                    # if (len(qa["answers"]) != 1) and (not is_impossible):
+                    #     raise ValueError(
+                    #         "For training, each question should have exactly 1 answer.")
                     if not is_impossible:
                         answer = qa["answers"][0]
                         orig_answer_text = answer["text"]
@@ -189,16 +191,17 @@ def convert_examples_to_features(examples, tokenizer, max_seq_length,
         if len(query_tokens) > max_query_length:
             query_tokens = query_tokens[0:max_query_length]
 
-        tok_to_orig_index = []
-        orig_to_tok_index = []
+        tok_to_orig_index = []      # 分词的字符个数，L")，会分成两个，所以有17，直接跳到19这样
+        orig_to_tok_index = []      # 有的token包含多个字符，比如 L")，所以会有17,17这样的
         all_doc_tokens = []
+        all_doc_len = []            # 新加的，为了使用transformer的encoder
         for (i, token) in enumerate(example.doc_tokens):
             orig_to_tok_index.append(len(all_doc_tokens))
             sub_tokens = tokenizer.tokenize(token)
             for sub_token in sub_tokens:
                 tok_to_orig_index.append(i)
                 all_doc_tokens.append(sub_token)
-
+        all_doc_len.append(len(all_doc_tokens))
         tok_start_position = None
         tok_end_position = None
         if is_training and example.is_impossible:
@@ -232,7 +235,7 @@ def convert_examples_to_features(examples, tokenizer, max_seq_length,
             if start_offset + length == len(all_doc_tokens):
                 break
             start_offset += min(length, doc_stride)
-
+        # 使用了一种doc span的方法，当len doc超过最大的时候，用一个滑动窗口记录doc，下面就是对每一个滑动窗口而言
         for (doc_span_index, doc_span) in enumerate(doc_spans):
             tokens = []
             token_to_orig_map = {}
@@ -247,7 +250,7 @@ def convert_examples_to_features(examples, tokenizer, max_seq_length,
             segment_ids.append(0)
 
             for i in range(doc_span.length):
-                split_token_index = doc_span.start + i
+                split_token_index = doc_span.start + i  # 对于下一个字符，（，Lin，)
                 token_to_orig_map[len(tokens)] = tok_to_orig_index[split_token_index]
 
                 is_max_context = _check_is_max_context(doc_spans, doc_span_index,
@@ -331,6 +334,7 @@ def convert_examples_to_features(examples, tokenizer, max_seq_length,
                     input_ids=input_ids,
                     input_mask=input_mask,
                     segment_ids=segment_ids,
+                    all_doc_len=all_doc_len,
                     start_position=start_position,
                     end_position=end_position,
                     is_impossible=example.is_impossible))
@@ -366,7 +370,7 @@ def _improve_answer_span(doc_tokens, input_start, input_end, tokenizer,
     # "Japanese", we just use "Japanese" as the annotation. This is fairly rare
     # in SQuAD, but does happen.
     tok_answer_text = " ".join(tokenizer.tokenize(orig_answer_text))
-
+    # 没太懂
     for new_start in range(input_start, input_end + 1):
         for new_end in range(input_end, new_start - 1, -1):
             text_span = " ".join(doc_tokens[new_start:(new_end + 1)])

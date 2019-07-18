@@ -30,7 +30,7 @@ from torch import nn
 from torch.nn import CrossEntropyLoss
 
 from .file_utils import cached_path, WEIGHTS_NAME, CONFIG_NAME
-
+from trans import Encoder
 logger = logging.getLogger(__name__)
 
 PRETRAINED_MODEL_ARCHIVE_MAP = {
@@ -1423,10 +1423,11 @@ class BertForQuestionAnswering(BertPreTrainedModel):
         self.output_attentions = output_attentions
         self.bert = BertModel(config, output_attentions=output_attentions,
                                       keep_multihead_output=keep_multihead_output)
+        self.trans_encoder = Encoder(vocab_size=config.vocab_size , max_seq_len=torch.tensor([370], dtype=torch.long))
         self.qa_outputs = nn.Linear(config.hidden_size, 2)
         self.apply(self.init_bert_weights)
 
-    def forward(self, input_ids, token_type_ids=None, attention_mask=None, start_positions=None,
+    def forward(self, input_ids, all_doc_len, token_type_ids=None, attention_mask=None, start_positions=None,
                 end_positions=None, head_mask=None):
         outputs = self.bert(input_ids, token_type_ids, attention_mask,
                                                        output_all_encoded_layers=False,
@@ -1434,7 +1435,9 @@ class BertForQuestionAnswering(BertPreTrainedModel):
         if self.output_attentions:
             all_attentions, sequence_output, _ = outputs
         else:
-            sequence_output, _ = outputs
+            sequence_output, _ = outputs        # get vectors of tokens and sens
+        self.trans_encoder(sequence_output, all_doc_len)
+
         logits = self.qa_outputs(sequence_output)
         start_logits, end_logits = logits.split(1, dim=-1)
         start_logits = start_logits.squeeze(-1)

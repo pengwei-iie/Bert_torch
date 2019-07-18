@@ -40,6 +40,8 @@ from pytorch_pretrained_bert.tokenization import BertTokenizer
 
 from run_squad_dataset_utils import read_squad_examples, convert_examples_to_features, RawResult, write_predictions
 
+os.environ["CUDA_VISIBLE_DEVICES"] = "4,5"
+
 if sys.version_info[0] == 2:
     import cPickle as pickle
 else:
@@ -230,8 +232,9 @@ def main():
         all_segment_ids = torch.tensor([f.segment_ids for f in train_features], dtype=torch.long)
         all_start_positions = torch.tensor([f.start_position for f in train_features], dtype=torch.long)
         all_end_positions = torch.tensor([f.end_position for f in train_features], dtype=torch.long)
+        all_doc_len = torch.tensor([f.all_doc_len for f in train_features], dtype=torch.long)
         train_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids,
-                                   all_start_positions, all_end_positions)
+                                   all_start_positions, all_end_positions, all_doc_len)
         if args.local_rank == -1:
             train_sampler = RandomSampler(train_data)
         else:
@@ -291,8 +294,8 @@ def main():
             for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration", disable=args.local_rank not in [-1, 0])):
                 if n_gpu == 1:
                     batch = tuple(t.to(device) for t in batch) # multi-gpu does scattering it-self
-                input_ids, input_mask, segment_ids, start_positions, end_positions = batch
-                loss = model(input_ids, segment_ids, input_mask, start_positions, end_positions)
+                input_ids, input_mask, segment_ids, start_positions, end_positions,  all_doc_len= batch
+                loss = model(input_ids, segment_ids, input_mask, start_positions, end_positions, all_doc_len)
                 if n_gpu > 1:
                     loss = loss.mean() # mean() to average on multi-gpu.
                 if args.gradient_accumulation_steps > 1:
