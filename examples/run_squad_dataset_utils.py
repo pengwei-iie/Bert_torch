@@ -136,9 +136,9 @@ def read_squad_examples(input_file, is_training, version_2_with_negative):
                 if is_training:
                     if version_2_with_negative:
                         is_impossible = qa["is_impossible"]
-                    if (len(qa["answers"]) != 1) and (not is_impossible):
-                        raise ValueError(
-                            "For training, each question should have exactly 1 answer.")
+                    # if (len(qa["answers"]) != 1) and (not is_impossible):
+                    #     raise ValueError(
+                    #         "For training, each question should have exactly 1 answer.")
                     if not is_impossible:
                         answer = qa["answers"][0]
                         orig_answer_text = answer["text"]
