@@ -15,7 +15,7 @@
 
 import numpy as np
 import torch
-import torch.functional as F
+import torch.nn.functional as F
 import torch.nn as nn
 
 
@@ -48,10 +48,10 @@ class ScaledDotProductAttention(nn.Module):
     attention = torch.bmm(q, k.transpose(1, 2))
     if scale:
       attention = attention * scale
-    if attn_mask:
+    # if attn_mask:
       # Mask out attention
       # set a negative infnite to where were padded a `PAD` attn_mask中为0的不用管，为1的会被负无穷替换
-      attention = attention.masked_fill_(attn_mask, -np.inf)
+    attention = attention.masked_fill_(attn_mask, -np.inf)
     attention = self.softmax(attention)
     attention = self.dropout(attention)
     context = torch.bmm(attention, v)
@@ -120,7 +120,9 @@ class PositionalEncoding(nn.Module):
 
     self.position_encoding.weight = nn.Parameter(position_encoding,
                                                  requires_grad=False)
-
+    # because the length of input is the same though different batches, so the position_encoding in the
+    # forward must be the same, rather than same in one batch
+    self.max_len = max_seq_len
   def forward(self, input_len):
     """Forward pass.
 
@@ -131,19 +133,23 @@ class PositionalEncoding(nn.Module):
     Returns:
       Position encoding(or position embedding) of a mini batch sequence.
     """
-    max_len = torch.max(input_len)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # max_len = torch.max(input_len)  # input_len is cuda
+    max_len = torch.tensor([self.max_len + 1], dtype=torch.long).to(device)
     tensor = torch.cuda.LongTensor if input_len.is_cuda else torch.LongTensor
     # we start from 1 because 0 is for PAD
     # we pad a sequence with PAD(0) to the max length
+    # input_pos = tensor(
+    #   [list(range(1, len + 1)) + [0] * (max_len - len) for len in input_len])
     input_pos = tensor(
-      [list(range(1, len + 1)) + [0] * (max_len - len) for len in input_len])
+      [list(range(1, len + 1)) + [0 for _ in range(max_len - len)] for len in input_len])
     return self.position_encoding(input_pos)
 
 
 class MultiHeadAttention(nn.Module):
   """Multi-Head attention."""
 
-  def __init__(self, model_dim=512, num_heads=8, dropout=0.0):
+  def __init__(self, model_dim=768, num_heads=8, dropout=0.0):
     """Init.
 
     Args:
@@ -188,12 +194,12 @@ class MultiHeadAttention(nn.Module):
     key = key.view(batch_size * num_heads, -1, dim_per_head)
     value = value.view(batch_size * num_heads, -1, dim_per_head)
     query = query.view(batch_size * num_heads, -1, dim_per_head)
-
-    if attn_mask:
-      attn_mask = attn_mask.repeat(num_heads, 1, 1)
+    #　下面的attn_mask有０有１,　不能直接if
+    # if attn_mask:
+    attn_mask = attn_mask.repeat(num_heads, 1, 1)
     # scaled dot product attention
     scale = (key.size(-1) // num_heads) ** -0.5
-    context, attention = self.dot_product_attention(
+    context, attention = self.dot_product_attention(    # (batch_size * num_heads, -1, dim_per_head), (batch_size * num_heads, len, len)
       query, key, value, scale, attn_mask)
 
     # concat heads
@@ -214,7 +220,7 @@ class MultiHeadAttention(nn.Module):
 class PositionalWiseFeedForward(nn.Module):
   """Positional-wise feed forward network."""
 
-  def __init__(self, model_dim=512, ffn_dim=2048, dropout=0.0):
+  def __init__(self, model_dim=768, ffn_dim=2048, dropout=0.0):
     """Init.
 
     Args:
@@ -225,7 +231,8 @@ class PositionalWiseFeedForward(nn.Module):
     """
     super(PositionalWiseFeedForward, self).__init__()
     self.w1 = nn.Conv1d(model_dim, ffn_dim, 1)
-    self.w2 = nn.Conv1d(model_dim, ffn_dim, 1)
+    self.w2 = nn.Conv1d(ffn_dim, model_dim, 1)
+
     self.dropout = nn.Dropout(dropout)
     self.layer_norm = nn.LayerNorm(model_dim)
 
@@ -250,7 +257,7 @@ class PositionalWiseFeedForward(nn.Module):
 class EncoderLayer(nn.Module):
   """A encoder block, with tow sub layers."""
 
-  def __init__(self, model_dim=512, num_heads=8, ffn_dim=2018, dropout=0.0):
+  def __init__(self, model_dim=768, num_heads=8, ffn_dim=2018, dropout=0.0):
     super(EncoderLayer, self).__init__()
 
     self.attention = MultiHeadAttention(model_dim, num_heads, dropout)
@@ -268,7 +275,9 @@ class EncoderLayer(nn.Module):
     """
 
     # self attention
-    context, attention = self.attention(inputs, inputs, inputs, padding_mask)
+    # context, attention = self.attention(inputs, inputs, inputs, padding_mask)
+    context, attention = self.attention(inputs, inputs, inputs, attn_mask)
+
 
     # feed forward network
     output = self.feed_forward(context)
@@ -282,7 +291,7 @@ class Encoder(nn.Module):
                vocab_size,
                max_seq_len,
                num_layers=6,
-               model_dim=512,
+               model_dim=768,
                num_heads=8,
                ffn_dim=2048,
                dropout=0.0):
@@ -295,7 +304,7 @@ class Encoder(nn.Module):
     self.seq_embedding = nn.Embedding(vocab_size + 1, model_dim, padding_idx=0)
     self.pos_embedding = PositionalEncoding(model_dim, max_seq_len)
 
-  def forward(self, inputs, inputs_len):
+  def forward(self, inputs, input_id, inputs_len):
     """Forward pass.
 
     Args:
@@ -308,14 +317,14 @@ class Encoder(nn.Module):
     """
     # output = self.seq_embedding(inputs)
     output = inputs
-    output += self.pos_embedding(inputs_len)
+    # output += self.pos_embedding(inputs_len)
 
-    self_attention_mask = padding_mask(inputs, inputs)
+    self_attention_mask = padding_mask(input_id, input_id)
 
     attentions = []
     for encoder in self.encoder_layers:
-      output, attention = encoder(output, self_attention_mask)
-      attentions.append(attention)
+      output, attention = encoder(output, self_attention_mask)    # attention size 48, 384, 384
+      attentions.append(attention)                                # attentions size 6, 48, 384, 384
 
     return output, attentions
 
@@ -446,7 +455,7 @@ class Transformer(nn.Module):
                tgt_vocab_size,
                tgt_max_len,
                num_layers=6,
-               model_dim=512,
+               model_dim=768,
                num_heads=8,
                ffn_dim=2048,
                dropout=0.2):
