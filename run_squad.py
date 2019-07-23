@@ -317,7 +317,7 @@ def main():
                         tb_writer.add_scalar('lr', optimizer.get_lr()[0], global_step)
                         tb_writer.add_scalar('loss', loss.item(), global_step)
                 if step % 100 == 0:
-                    print('loss', loss)
+                    print('loss', loss.item())
 
     if args.do_train and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
         # Save a trained model, configuration and tokenizer
