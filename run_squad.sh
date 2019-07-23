@@ -1,6 +1,6 @@
 export SQUAD_DIR=squad_data
 
-CUDA_VISIBLE_DEVICES=4,5 python examples/run_squad.py \
+python run_squad.py \
   --bert_model 'bert-base-uncased' \
   --do_train \
   --do_predict \
