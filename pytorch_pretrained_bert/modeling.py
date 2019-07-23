@@ -1436,7 +1436,7 @@ class BertForQuestionAnswering(BertPreTrainedModel):
             all_attentions, sequence_output, _ = outputs
         else:
             sequence_output, _ = outputs        # get vectors of tokens and sens
-        # sequence_output, attentions = self.trans_encoder(sequence_output, input_ids, doc_len)
+        sequence_output, attentions = self.trans_encoder(sequence_output, input_ids, doc_len)
 
         logits = self.qa_outputs(sequence_output)
         start_logits, end_logits = logits.split(1, dim=-1)
