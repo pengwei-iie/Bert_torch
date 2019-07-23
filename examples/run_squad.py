@@ -40,8 +40,6 @@ from pytorch_pretrained_bert.tokenization import BertTokenizer
 
 from run_squad_dataset_utils import read_squad_examples, convert_examples_to_features, RawResult, write_predictions
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "4,5"
-
 if sys.version_info[0] == 2:
     import cPickle as pickle
 else:
@@ -295,7 +293,7 @@ def main():
                 if n_gpu == 1:
                     batch = tuple(t.to(device) for t in batch) # multi-gpu does scattering it-self
                 input_ids, input_mask, segment_ids, doc_len, start_positions, end_positions= batch
-                loss = model(input_ids, doc_len, segment_ids, input_mask, start_positions, end_positions)
+                loss = model(input_ids, doc_len, segment_ids, input_mask, start_positions, end_positions, head_mask=None)
                 if n_gpu > 1:
                     loss = loss.mean() # mean() to average on multi-gpu.
                 if args.gradient_accumulation_steps > 1:
@@ -318,6 +316,8 @@ def main():
                     if args.local_rank in [-1, 0]:
                         tb_writer.add_scalar('lr', optimizer.get_lr()[0], global_step)
                         tb_writer.add_scalar('loss', loss.item(), global_step)
+                if step % 100 == 0:
+                    print('loss', loss)
 
     if args.do_train and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
         # Save a trained model, configuration and tokenizer
