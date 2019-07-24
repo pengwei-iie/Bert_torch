@@ -1423,7 +1423,7 @@ class BertForQuestionAnswering(BertPreTrainedModel):
         self.output_attentions = output_attentions
         self.bert = BertModel(config, output_attentions=output_attentions,
                                       keep_multihead_output=keep_multihead_output)
-        # self.trans_encoder = Encoder(vocab_size=config.vocab_size , max_seq_len=torch.tensor([383], dtype=torch.long))
+        self.trans_encoder = Encoder(vocab_size=config.vocab_size , max_seq_len=torch.tensor([383], dtype=torch.long))
         self.qa_outputs = nn.Linear(config.hidden_size, 2)
         self.apply(self.init_bert_weights)
 
@@ -1436,7 +1436,7 @@ class BertForQuestionAnswering(BertPreTrainedModel):
             all_attentions, sequence_output, _ = outputs
         else:
             sequence_output, _ = outputs        # get vectors of tokens and sens
-        # sequence_output, attentions = self.trans_encoder(sequence_output, input_ids, doc_len)
+        sequence_output, attentions = self.trans_encoder(sequence_output, input_ids, doc_len)
 
         logits = self.qa_outputs(sequence_output)
         start_logits, end_logits = logits.split(1, dim=-1)
