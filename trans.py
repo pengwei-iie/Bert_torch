@@ -313,7 +313,7 @@ class Encoder(nn.Module):
     self.pos_embedding = PositionalEncoding(model_dim, max_seq_len)
     # self.linear = nn.Linear(model_dim*2, model_dim)
 
-  def forward(self, inputs, input_id, inputs_len):
+  def forward(self, inputs, input_id):
     """Forward pass.
 
     Args:
