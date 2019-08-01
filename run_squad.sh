@@ -1,6 +1,6 @@
 export SQUAD_DIR=squad_data
 
-CUDA_VISIBLE_DEVICES=4,5 python examples/run_squad.py \
+CUDA_VISIBLE_DEVICES=4,5 python run_squad.py \
   --bert_model 'bert-base-uncased' \
   --do_train \
   --do_predict \
@@ -8,8 +8,9 @@ CUDA_VISIBLE_DEVICES=4,5 python examples/run_squad.py \
   --train_file $SQUAD_DIR/train-v1.1.json \
   --predict_file $SQUAD_DIR/dev-v1.1.json \
   --train_batch_size 12 \
-  --learning_rate 3e-5 \
+  --learning_rate 6e-5 \
   --num_train_epochs 2.0 \
   --max_seq_length 384 \
   --doc_stride 128 \
-  --output_dir tmp/debug_squad/
+  --overwrite_output_dir \
+  --output_dir tmp/big_learning/
